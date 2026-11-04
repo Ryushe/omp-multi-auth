@@ -7,8 +7,8 @@
 - **Intended integration target:** `origin/main` in `Ryushe/omp-multi-auth`
 - **Last updated:** 2026-11-03
 - **Owning feature branch/ref:** `codex/opencode-go-pool`
-- **Latest immutable recovery checkpoint:** none yet
-- **Feature implementation commit(s):** none yet
+- **Latest immutable recovery checkpoint:** `03c6750868e52e65bdfc3fa376f6020e66264ca7`
+- **Feature implementation commit(s):** `03c6750868e52e65bdfc3fa376f6020e66264ca7`
 - **Inspiration / canonical references:** OMP's stored API-key pool and OpenCode Go's usage endpoint.
 
 ## Intent
@@ -24,7 +24,7 @@ After a selected stored API key receives HTTP 401, the checker tries other enabl
 - Tests and commands: `npm test` passed; the isolated OMP 18.13.3 host suite passed 11 of 12 tests. The unrelated existing Antigravity prompt assertion fails as documented in `BUGFIXES.md`.
 - Independent review: not performed.
 - Replay/cohort/fixture evidence: mocked rejected, disabled, working, overridden, forbidden, and all-rejected keys; a live user-authorized Go usage check, status-line check, and zero-cost model request.
-- Merge/ancestry evidence: pending publication.
+- Merge/ancestry evidence: based on fork `main` at `3d8f2bd7b4a17f178a0f4239ce68ad4a686d650b`; pending publication.
 
 ## Blockers and deferred work
 
@@ -37,10 +37,10 @@ After a selected stored API key receives HTTP 401, the checker tries other enabl
 ## Interruption / resume handoff
 
 - **Owning feature branch/ref:** `codex/opencode-go-pool`
-- **Latest immutable recovery checkpoint:** none yet
-- **Feature implementation commit(s):** none yet
-- **Exact resume point:** review the staged diff, commit, and publish the fork.
-- **Working-tree state at handoff:** fix in progress.
+- **Latest immutable recovery checkpoint:** `03c6750868e52e65bdfc3fa376f6020e66264ca7`
+- **Feature implementation commit(s):** `03c6750868e52e65bdfc3fa376f6020e66264ca7`
+- **Exact resume point:** publish the reviewed fix to the fork.
+- **Working-tree state at handoff:** the checkpoint contains the fix and tests; this dossier-only update follows it.
 
 ## Decision gates
 
@@ -51,3 +51,4 @@ After a selected stored API key receives HTTP 401, the checker tries other enabl
 ## Decision record
 
 - 2026-11-03 — created after a live Go authentication check exposed a rejected-first-key case.
+- 2026-11-03 — reviewed tests and live evidence; publish to the fork with the unrelated host-test failure disclosed.
