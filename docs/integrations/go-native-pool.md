@@ -7,8 +7,8 @@
 - **Intended integration target:** `origin/main` in `Ryushe/omp-multi-auth`
 - **Last updated:** 2026-11-03
 - **Owning feature branch/ref:** `codex/go-native-pool`
-- **Latest immutable recovery checkpoint:** none yet
-- **Feature implementation commit(s):** none yet
+- **Latest immutable recovery checkpoint:** `3aa552a648be50198d84a9d2770167f470e61de1`
+- **Feature implementation commit(s):** `3aa552a648be50198d84a9d2770167f470e61de1`
 - **Inspiration / canonical references:** OMP's native API-key pool and OpenCode Go's reported usage windows.
 
 ## Intent
@@ -21,26 +21,26 @@ The limits list checks each distinct enabled saved key independently, gives it a
 
 ## Evidence and review
 
-- Tests and commands: `npm test`; isolated OMP host regression; live Hoster verification pending.
+- Tests and commands: `npm test` passed; the isolated OMP host regression passed; the live Hoster two-key status-line verification passed.
 - Independent review: not performed.
-- Replay/cohort/fixture evidence: fixtures cover differing quotas, invalid and disabled keys, selection identity, and runtime overrides.
-- Merge/ancestry evidence: pending publication.
+- Replay/cohort/fixture evidence: fixtures cover differing quotas, invalid and disabled keys, selection identity, and runtime overrides. A user-authorized Hoster check verified two independent live quota snapshots and the pool status line.
+- Merge/ancestry evidence: based on fork `main` at `ed309214604a0cdc200474fc5effb3b82260dc99`; pending publication.
 
 ## Blockers and deferred work
 
-- **Missing test or evidence:** live Hoster status-line verification for the two-key pool.
-- **Command / fixture / environment needed:** user-authorized OMP process with the feature branch loaded and no model request.
-- **Trigger to run it:** after publishing the temporary feature ref for the bounded test.
-- **Why it blocks integration, activation, or promotion:** it verifies the real OMP auth-storage shape and user-visible status against live quota data.
-- **Next completion step / successor reference:** finish the live check and publish the reviewed fix to the fork.
+- **Missing test or evidence:** none required for this bounded change.
+- **Command / fixture / environment needed:** not applicable.
+- **Trigger to run it:** not applicable.
+- **Why it blocks integration, activation, or promotion:** not applicable.
+- **Next completion step / successor reference:** publish the reviewed fix to the fork.
 
 ## Interruption / resume handoff
 
 - **Owning feature branch/ref:** `codex/go-native-pool`
-- **Latest immutable recovery checkpoint:** none yet
-- **Feature implementation commit(s):** none yet
-- **Exact resume point:** finish tests, checkpoint, and run the Hoster status-line check.
-- **Working-tree state at handoff:** feature in progress.
+- **Latest immutable recovery checkpoint:** `3aa552a648be50198d84a9d2770167f470e61de1`
+- **Feature implementation commit(s):** `3aa552a648be50198d84a9d2770167f470e61de1`
+- **Exact resume point:** publish the verified feature to the fork.
+- **Working-tree state at handoff:** the checkpoint contains the implementation and tests; this dossier-only update follows it.
 
 ## Decision gates
 
@@ -51,3 +51,4 @@ The limits list checks each distinct enabled saved key independently, gives it a
 ## Decision record
 
 - 2026-11-03 — created after a user-authorized Hoster test found two Go keys under one native provider.
+- 2026-11-03 — isolated tests and the live two-key Hoster status-line check passed; publish to the fork.
