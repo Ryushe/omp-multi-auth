@@ -9,6 +9,7 @@ import { getAuthStorage, adaptAuthStorage, getModels, subProviderName, type Auth
 import { loadGlobalConfig, loadProjectConfig, parseEnvConfig, mergeConfigs, normalizeEntries } from "./config.ts";
 import { getWrappedSelectIndex, showWrappedSelect } from "./ui.ts";
 import type { SelectItem } from "@oh-my-pi/pi-tui";
+import { checkOpenCodeGoQuotaAccount, getOpenCodeGoWindowRemaining, isOpenCodeGoWindowLimited } from "./opencode-go.ts";
 
 export const DEFAULT_CODEX_USAGE_BASE_URL = "https://chatgpt.com/backend-api";
 export const GOOGLE_GEMINI_QUOTA_ENDPOINT = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota";
@@ -359,7 +360,7 @@ export function formatQuotaCurrentHint(
 		hint += ` • best available: ${best.account.displayName}`;
 	}
 	if (current.kind !== "ready") {
-		hint += " • snapshot only: auto-switch happens after a runtime rate-limit error";
+		hint += " • snapshot only: a configured OMP fallback may run after a rate-limit error";
 	}
 	return hint;
 }
@@ -1149,6 +1150,7 @@ export const PROVIDER_QUOTA_CHECKERS: ProviderQuotaChecker[] = [
 	codexQuotaChecker,
 	googleGeminiCliQuotaChecker,
 	googleAntigravityQuotaChecker,
+	{ baseProvider: "opencode-go", check: checkOpenCodeGoQuotaAccount },
 ];
 
 export async function showQuotaDetails(
@@ -1217,6 +1219,19 @@ export function formatCurrentModelQuota(
 		const worst = pickWorstQuotaModel(matches);
 		if (!worst) return undefined;
 		return `${worst.model} ${formatRemainingPercent(worst.remainingPercent)} ${formatResetShort(worst.resetAt)}`;
+	}
+
+	if (result.opencodeGoSnapshot) {
+		const windows = [
+			{ label: "5h", window: result.opencodeGoSnapshot.rolling },
+			{ label: "7d", window: result.opencodeGoSnapshot.weekly },
+			{ label: "month", window: result.opencodeGoSnapshot.monthly },
+		];
+		const score = (window: typeof windows[number]["window"]) =>
+			isOpenCodeGoWindowLimited(window) ? -1 : getOpenCodeGoWindowRemaining(window);
+		const worst = windows.reduce((left, right) => score(left.window) <= score(right.window) ? left : right);
+		const limited = isOpenCodeGoWindowLimited(worst.window) ? " limited" : "";
+		return `${worst.label}${limited} ${formatRemainingPercent(getOpenCodeGoWindowRemaining(worst.window))} ${formatResetShort(worst.window.resetAt)}`;
 	}
 
 	if (result.codexSnapshot) {
@@ -1311,6 +1326,8 @@ export function refreshQuotaStatusLine(ctx: ExtensionContext): void {
 	const cached = statusQuotaCache.get(model.provider);
 	if (cached) {
 		ctx.ui.setStatus(QUOTA_STATUS_KEY, formatCurrentModelQuota(cached.result, model) ?? undefined);
+	} else {
+		ctx.ui.setStatus(QUOTA_STATUS_KEY, undefined);
 	}
 	if (!cached || Date.now() - cached.at > STATUS_QUOTA_TTL_MS) {
 		fetchStatusQuotaResult(ctx, model.provider, base).then((result) => {

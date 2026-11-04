@@ -3,6 +3,7 @@ import type { ExtensionCommandContext, ExtensionContext, AuthStorage as HostAuth
 import { getBundledModels, type GeneratedProvider } from "@oh-my-pi/pi-catalog";
 import type { Api, Model } from "@oh-my-pi/pi-ai";
 import type { GoogleQuotaAccountSnapshot, CodexUsageSnapshot } from "./quota.ts";
+import type { OpenCodeGoUsageSnapshot } from "./opencode-go.ts";
 
 export function getModels(providerId: string): Model<Api>[] {
 	return getBundledModels(providerId as GeneratedProvider) as Model<Api>[];
@@ -12,6 +13,7 @@ export type QuotaStatusKind = "ready" | "watch" | "low" | "blocked" | "error" | 
 
 export interface AuthStorageEntry {
 	type?: string;
+	key?: string;
 	access?: string;
 	refresh?: string;
 	expires?: number;
@@ -151,11 +153,13 @@ export function adaptAuthStorage(raw: unknown): MultiAuthStorage {
 	};
 
 	return new Proxy(target, {
-		get(base, prop, receiver) {
+		get(base, prop) {
 			if (typeof prop === "string" && prop in adapter) {
 				return adapter[prop];
 			}
-			const value = Reflect.get(base, prop, receiver);
+			// AuthStorage exposes namespaces through getters backed by private fields.
+			// Invoke those getters on the original instance, not the proxy.
+			const value = Reflect.get(base, prop, base);
 			if (typeof value === "function") {
 				return value.bind(base);
 			}
@@ -183,6 +187,7 @@ export interface QuotaCheckResult {
 	score: number;
 	googleSnapshot?: GoogleQuotaAccountSnapshot;
 	codexSnapshot?: CodexUsageSnapshot;
+	opencodeGoSnapshot?: OpenCodeGoUsageSnapshot;
 }
 
 export interface ProviderQuotaChecker {

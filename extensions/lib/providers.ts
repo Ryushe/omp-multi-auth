@@ -188,6 +188,14 @@ export function getGitHubCopilotBaseUrl(token: string | undefined, enterpriseUrl
 // transport and puts subscription identity back on emitted assistant messages.
 export const SUB_TRANSPORT_CONFIG: Record<string, { builtinApi: Api | ((modelId: string) => Api); customApiId: string }> = {
 	"google-antigravity": { builtinApi: "google-gemini-cli", customApiId: "google-antigravity-mp" },
+	"opencode-go": {
+		builtinApi: (modelId) => {
+			const model = getModels("opencode-go").find((candidate) => candidate.id === modelId);
+			if (!model) throw new Error(`Missing bundled model opencode-go/${modelId}`);
+			return model.api;
+		},
+		customApiId: "opencode-go-multi-auth",
+	},
 };
 
 
@@ -320,6 +328,7 @@ export const API_KEY_PROVIDERS: ApiKeyProviderSpec[] = [
 	{ id: "zai", displayName: "Z.AI (GLM)", placeholder: "..." },
 	{ id: "minimax", displayName: "MiniMax (Global)", placeholder: "..." },
 	{ id: "minimax-cn", displayName: "MiniMax (China)", placeholder: "..." },
+	{ id: "opencode-go", displayName: "OpenCode Go", placeholder: "OpenCode Console API key" },
 ];
 
 export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {

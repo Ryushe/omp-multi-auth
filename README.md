@@ -1,18 +1,14 @@
 # omp-multi-auth
 
-Multi-account OAuth login for [omp (Oh My Pi)](https://github.com/can1357/oh-my-pi). Add, authenticate, and switch between multiple accounts per provider. OMP's built-in fallback handles rate-limit retry and model fallback.
+Multi-account login for [omp (Oh My Pi)](https://github.com/can1357/oh-my-pi). Add, authenticate, and switch between multiple accounts per provider. OMP handles request retries and configured model fallbacks.
 
 ## Install
 
 ```bash
-omp install npm:omp-multi-auth
+omp install git+https://github.com/Ryushe/omp-multi-auth.git
 ```
 
-Or install from GitHub:
-
-```bash
-omp install git:github.com/tuandinh0801/omp-multi-auth
-```
+Use a recent OMP release with its OpenCode Go model catalog. The Go integration has been checked with OMP 18.13.3.
 
 ## Features
 
@@ -52,7 +48,7 @@ omp install git:github.com/tuandinh0801/omp-multi-auth
 | `/multi-auth-preset toggle` | Enable or disable a preset |
 | `/multi-auth-preset remove` | Delete a preset |
 
-Presets select models across providers. On rate limits, requests fall through to OMP's built-in fallback.
+Presets select models across providers. OMP can retry or use a configured fallback after a rate-limit error; the quota display itself does not automatically switch accounts.
 
 ## Project-level configuration
 
@@ -96,15 +92,33 @@ Create `.omp/multi-auth.json` in a project to restrict which subscription provid
 | `zai` | Z.AI (GLM) |
 | `minimax` | MiniMax (Global) |
 | `minimax-cn` | MiniMax (China) |
+| `opencode-go` | OpenCode Go |
 | `cursor` | Cursor (dashboard API key `crsr_...` / `cursor_...` or browser sign-in) |
 
 API-key providers support full multi-account operation. Add an account with `/multi-auth add`, select the provider, then authenticate via `/multi-auth login` (or `/login <name>`) and paste your API key when prompted. Each account stores its own key independently in OMP auth storage.
 
 For `cursor`, `/multi-auth login` prompts for a dashboard API key (`crsr_...`/`cursor_...`). Submit a key to use token exchange, or leave it blank to sign in via browser PKCE OAuth. Both methods refresh automatically.
 
+For OpenCode Go, create a subscription and copy its API key from the [OpenCode Console](https://opencode.ai/console). Use `/multi-auth add`, choose `opencode-go`, and save the key when prompted. Repeat for each independently configured account, then use `/multi-auth switch` to select one. Models use OMP's Go catalog and its native transport for each model.
+
 ## Built-in quotas
 
-Run `/multi-auth limits` to inspect quota and usage information for supported providers. This currently includes built-in quota checks for Codex and Google providers. Results depend on provider availability and authenticated account state.
+Run `/multi-auth limits` to inspect quota and usage information for Codex, Google, and OpenCode Go accounts. Results depend on provider availability and authenticated account state.
+
+For Go, the extension queries the provider's usage endpoint with each account's active key and shows the five-hour, weekly, and monthly included-usage windows and their reset times. The status line shows the most constrained window, including a window reported as limited. Go's limits are shared usage meters, and models can consume the allowance at different rates. Free models can remain available after an included Go limit is reached.
+
+The usage endpoint does not indicate whether **Extra Usage** is enabled. When an included limit is reached, requests may still succeed and be charged to your Console balance; check the Console for that setting. A low or exhausted included allowance is a snapshot, not proof that inference is blocked. The extension does not change billing settings or automatically switch accounts based on the snapshot.
+
+To let OMP try another account after a usage-limit error, configure an OMP fallback chain. For example, when starting on `opencode-go-2/glm-5.3-flash`, this entry in `~/.omp/agent/config.yml` offers the same model on account 3:
+
+```yaml
+retry:
+  fallbackChains:
+    default:
+      - opencode-go-3/glm-5.3-flash
+```
+
+Merge this with any existing retry settings; the default chain also applies to other chat models. See [OMP's retry settings](https://github.com/can1357/oh-my-pi/blob/main/docs/settings.md#retry-and-fallback) for per-model chains and retry behavior. If Extra Usage allows the request to succeed, no limit error is raised and this fallback will not run. Keys for the same workspace or member can share an allowance; adding keys alone does not create separate quota.
 
 ## Configuration files
 

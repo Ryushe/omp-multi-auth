@@ -33,6 +33,8 @@ try {
 	for (const [provider, key] of [
 		["openai-2", "test-openai-key"],
 		["deepseek-2", "test-deepseek-key"],
+		["opencode-go-2", "test-opencode-go-key-one"],
+		["opencode-go-3", "test-opencode-go-key-two"],
 	]) {
 		insert.run(provider, JSON.stringify({ key }));
 	}
@@ -49,7 +51,7 @@ try {
 			env: {
 				...process.env,
 				PI_CODING_AGENT_DIR: agentDir,
-				MULTI_SUB: "openai:1,deepseek:1",
+				MULTI_SUB: "openai:1,deepseek:1,opencode-go:2",
 			},
 			timeout: 30_000,
 		},
@@ -94,6 +96,8 @@ try {
 	for (const [provider, baseUrl] of [
 		["openai-2", "https://api.openai.com/v1"],
 		["deepseek-2", "https://api.deepseek.com"],
+		["opencode-go-2", "https://opencode.ai/inference/go/v1"],
+		["opencode-go-3", "https://opencode.ai/inference/go/v1"],
 	]) {
 		const providerModels = modelsResponse.data.models.filter((model) => model.provider === provider);
 		assert.ok(providerModels.length > 0, `missing models for ${provider}`);
@@ -106,6 +110,8 @@ try {
 	const providerIds = providers.map((provider) => typeof provider === "string" ? provider : provider.id);
 	assert.ok(providerIds.includes("openai-2"), "missing openai-2 login provider");
 	assert.ok(providerIds.includes("deepseek-2"), "missing deepseek-2 login provider");
+	assert.ok(providerIds.includes("opencode-go-2"), "missing opencode-go-2 login provider");
+	assert.ok(providerIds.includes("opencode-go-3"), "missing opencode-go-3 login provider");
 	console.log("API-key provider check passed");
 } finally {
 	rmSync(agentDir, { recursive: true, force: true });

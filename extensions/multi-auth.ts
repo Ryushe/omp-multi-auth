@@ -87,6 +87,7 @@ export default function multiSub(pi: ExtensionAPI) {
 
 	pi.on("model_select", async (_event, ctx) => {
 		await enforceProjectRestriction(ctx, "model");
+		refreshQuotaStatusLine(ctx);
 	});
 
 	pi.on("input", async (event, ctx) => {
