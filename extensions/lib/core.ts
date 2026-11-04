@@ -188,6 +188,7 @@ export interface QuotaCheckResult {
 	googleSnapshot?: GoogleQuotaAccountSnapshot;
 	codexSnapshot?: CodexUsageSnapshot;
 	opencodeGoSnapshot?: OpenCodeGoUsageSnapshot;
+	opencodeGoAlternateKey?: boolean;
 }
 
 export interface ProviderQuotaChecker {

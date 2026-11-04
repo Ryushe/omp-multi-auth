@@ -91,7 +91,10 @@ export async function checkOpenCodeGoQuotaAccount(
 	signal?: AbortSignal,
 ): Promise<QuotaCheckResult> {
 	let key = account.auth?.type === "api_key" ? account.auth.key : undefined;
-	const keys = authStorage.keys as { peek?: (providerName: string) => Promise<string | undefined> } | undefined;
+	const keys = authStorage.keys as {
+		peek?: (providerName: string) => Promise<string | undefined>;
+		source?: (providerName: string) => { kind?: string } | undefined;
+	} | undefined;
 	if (typeof keys?.peek === "function") {
 		try {
 			key = await keys.peek(account.providerName) ?? key;
@@ -116,15 +119,40 @@ export async function checkOpenCodeGoQuotaAccount(
 
 	try {
 		const timeout = AbortSignal.timeout(15_000);
-		const response = await fetch(OPENCODE_GO_USAGE_URL, {
+		const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
+		const fetchUsage = (candidate: string) => fetch(OPENCODE_GO_USAGE_URL, {
 			headers: {
-				Authorization: `Bearer ${key}`,
+				Authorization: `Bearer ${candidate}`,
 				Accept: "application/json",
 				"User-Agent": "omp-multi-auth/1.3",
 				"x-opencode-session": usageSessionId,
 			},
-			signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+			signal: requestSignal,
 		});
+		let response = await fetchUsage(key);
+		let alternateKey = false;
+		// OMP can keep several keys under one native provider. If its selected
+		// stored key was revoked, inspect other enabled saved keys. An explicit
+		// runtime/config/environment override must not be silently substituted.
+		if (response.status === 401 && keys?.source?.(account.providerName)?.kind === "api_key") {
+			const credentials = authStorage.credentials as {
+				list?: (providerName: string) => Array<{ disabledCause?: unknown; credential?: { type?: string; key?: string } }>;
+			} | undefined;
+			const seen = new Set([key]);
+			for (const row of typeof credentials?.list === "function" ? await credentials.list(account.providerName) : []) {
+				const candidate = row.credential?.type === "api_key" ? row.credential.key : undefined;
+				if (row.disabledCause || typeof candidate !== "string" || !candidate.trim() || seen.has(candidate)) continue;
+				seen.add(candidate);
+				const alternate = await fetchUsage(candidate);
+				if (alternate.ok) {
+					await response.body?.cancel();
+					response = alternate;
+					alternateKey = true;
+					break;
+				}
+				await alternate.body?.cancel();
+			}
+		}
 		if (!response.ok) {
 			const hint = response.status === 401 ? "Check the saved API key and log in again."
 				: response.status === 403 ? "Check that this key can access an active Go subscription."
@@ -138,10 +166,11 @@ export async function checkOpenCodeGoQuotaAccount(
 		return {
 			account,
 			...classification,
-			summary: `${windowSummary("5h", snapshot.rolling)} | ${windowSummary("7d", snapshot.weekly)} | ${windowSummary("month", snapshot.monthly)} | ${classification.score === 0 ? "included limit reached" : `${classification.kind} (included usage)`}`,
+			summary: `${alternateKey ? "alternate saved key | " : ""}${windowSummary("5h", snapshot.rolling)} | ${windowSummary("7d", snapshot.weekly)} | ${windowSummary("month", snapshot.monthly)} | ${classification.score === 0 ? "included limit reached" : `${classification.kind} (included usage)`}`,
 			details: [
 				`account: ${account.displayName}`,
 				`provider: ${account.providerName}`,
+				...(alternateKey ? ["The active key was rejected; usage is for an alternate saved key. OMP controls which key handles requests."] : []),
 				windowDetails("5-hour window", snapshot.rolling),
 				windowDetails("weekly window", snapshot.weekly),
 				windowDetails("monthly window", snapshot.monthly),
@@ -149,6 +178,7 @@ export async function checkOpenCodeGoQuotaAccount(
 				`endpoint: ${OPENCODE_GO_USAGE_URL}`,
 			],
 			opencodeGoSnapshot: snapshot,
+			opencodeGoAlternateKey: alternateKey,
 		};
 	} catch (error: unknown) {
 		if (signal?.aborted) throw error;

@@ -48,6 +48,44 @@ try {
 	assert.equal(missing.kind, "missing-auth");
 	assert.equal(calls.length, 4, "a missing key must not send a request");
 
+	const poolCalls = [];
+	globalThis.fetch = async (_url, options) => {
+		const authorization = options.headers.Authorization;
+		poolCalls.push(authorization);
+		return authorization === "Bearer rejected-key" ? new Response("Unauthorized", { status: 401 }) : Response.json(payload());
+	};
+	const pooledStorage = {
+		keys: { peek: async () => "rejected-key", source: () => ({ kind: "api_key" }) },
+		credentials: { list: () => [
+			{ credential: { type: "api_key", key: "rejected-key" } },
+			{ credential: { type: "api_key", key: "disabled-key" }, disabledCause: "disabled" },
+			{ credential: { type: "api_key", key: "working-key" } },
+		] },
+	};
+	const alternate = await checkOpenCodeGoQuotaAccount(account("opencode-go", "rejected-key"), pooledStorage);
+	assert.deepEqual(poolCalls, ["Bearer rejected-key", "Bearer working-key"]);
+	assert.equal(alternate.opencodeGoAlternateKey, true);
+	assert.match(alternate.summary, /alternate saved key/i);
+	assert.ok(alternate.details.some((detail) => /active key.*rejected/i.test(detail)));
+
+	poolCalls.length = 0;
+	const override = { ...pooledStorage, keys: { ...pooledStorage.keys, source: () => ({ kind: "runtime" }) } };
+	const overrideResult = await checkOpenCodeGoQuotaAccount(account("opencode-go", "rejected-key"), override);
+	assert.equal(overrideResult.kind, "error");
+	assert.deepEqual(poolCalls, ["Bearer rejected-key"], "an explicit runtime override must not fall back to another key");
+
+	poolCalls.length = 0;
+	globalThis.fetch = async (_url, options) => { poolCalls.push(options.headers.Authorization); return new Response("Forbidden", { status: 403 }); };
+	const forbidden = await checkOpenCodeGoQuotaAccount(account("opencode-go", "rejected-key"), pooledStorage);
+	assert.equal(forbidden.kind, "error");
+	assert.deepEqual(poolCalls, ["Bearer rejected-key"], "an entitlement error must not select another account");
+
+	globalThis.fetch = async () => new Response("Unauthorized", { status: 401 });
+	const allRejected = await checkOpenCodeGoQuotaAccount(account("opencode-go", "rejected-key"), pooledStorage);
+	assert.equal(allRejected.kind, "error");
+	assert.match(allRejected.summary, /HTTP 401/);
+	assert.doesNotMatch(allRejected.details.join(" "), /rejected-key|working-key/);
+
 	const reached = payload();
 	reached.usage.monthly = window(100);
 	globalThis.fetch = async () => Response.json(reached);

@@ -1231,7 +1231,8 @@ export function formatCurrentModelQuota(
 			isOpenCodeGoWindowLimited(window) ? -1 : getOpenCodeGoWindowRemaining(window);
 		const worst = windows.reduce((left, right) => score(left.window) <= score(right.window) ? left : right);
 		const limited = isOpenCodeGoWindowLimited(worst.window) ? " limited" : "";
-		return `${worst.label}${limited} ${formatRemainingPercent(getOpenCodeGoWindowRemaining(worst.window))} ${formatResetShort(worst.window.resetAt)}`;
+		const alternate = result.opencodeGoAlternateKey ? "alt key " : "";
+		return `${alternate}${worst.label}${limited} ${formatRemainingPercent(getOpenCodeGoWindowRemaining(worst.window))} ${formatResetShort(worst.window.resetAt)}`;
 	}
 
 	if (result.codexSnapshot) {

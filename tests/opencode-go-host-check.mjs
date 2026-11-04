@@ -18,10 +18,12 @@ try {
 	assert.equal(bootstrap.status, 0, bootstrap.stderr);
 	const db = new DatabaseSync(join(agentDir, "agent.db"));
 	const insert = db.prepare("INSERT INTO auth_credentials (provider, credential_type, data, identity_key) VALUES (?, 'api_key', ?, NULL)");
+	insert.run("opencode-go", JSON.stringify({ key: "test-go-base-rejected" }));
+	insert.run("opencode-go", JSON.stringify({ key: "test-go-base-working" }));
 	insert.run("opencode-go-2", JSON.stringify({ key: "test-go-key-two" }));
 	insert.run("opencode-go-3", JSON.stringify({ key: "test-go-key-three" }));
 	db.close();
-	writeFileSync(join(agentDir, "config.yml"), `retry:\n  enabled: true\n  maxRetries: 1\n  baseDelayMs: 1\n  maxDelayMs: 1000\n  modelFallback: true\n  fallbackChains:\n    default:\n      - opencode-go-3/beam-free\n`);
+	writeFileSync(join(agentDir, "config.yml"), `retry:\n  enabled: true\n  maxRetries: 1\n  baseDelayMs: 1\n  maxDelayMs: 1000\n  modelFallback: true\n  fallbackChains:\n    opencode-go-2/beam-free:\n      - opencode-go-3/beam-free\n`);
 
 	const quotaCapture = join(agentDir, "quota.json");
 	const wireCapture = join(agentDir, "wire.json");
@@ -37,6 +39,11 @@ globalThis.fetch = async (input, init) => {
   const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
   if (url === "https://opencode.ai/zen/go/v1/usage") {
     const auth = headers.get("authorization");
+    if (auth === "Bearer test-go-base-rejected") return new Response("Unauthorized", { status: 401 });
+    if (auth === "Bearer test-go-base-working") {
+      const window = { status: "ok", percent: 20, resetsAt: "2026-12-01T12:00:00Z" };
+      return Response.json({ usage: { rolling: window, weekly: window, monthly: window } });
+    }
     calls.push({ auth, session: headers.get("x-opencode-session") });
     const percent = auth === "Bearer test-go-key-two" ? 20 : 70;
     const window = { status: "ok", percent, resetsAt: "2026-12-01T12:00:00Z" };
@@ -66,7 +73,7 @@ export default function probe(pi) {
   });
 }
 `);
-	child = spawn("omp", [...common, "--extension", join(root, "extensions", "multi-auth.ts"), "--extension", probe], {
+	child = spawn("omp", [...common, "--model", "opencode-go/beam-free", "--extension", join(root, "extensions", "multi-auth.ts"), "--extension", probe], {
 		cwd: root,
 		env: { ...env, MP_GO_QUOTA: quotaCapture, MP_GO_WIRE: wireCapture },
 		timeout: 45_000,
@@ -78,12 +85,15 @@ export default function probe(pi) {
 	const statusEvents = [];
 	let resolveQuotaStatus;
 	const quotaStatus = new Promise((resolve) => { resolveQuotaStatus = resolve; });
+	let resolveAlternateStatus;
+	const alternateStatus = new Promise((resolve) => { resolveAlternateStatus = resolve; });
 	const lines = createInterface({ input: child.stdout });
 	lines.on("line", (line) => {
 		try {
 			const event = JSON.parse(line);
 			if (event.method === "setStatus") statusEvents.push({ key: event.statusKey, text: event.statusText });
-			if (event.method === "setStatus" && event.statusKey === "multi-auth-quota" && /5h 80%/.test(event.statusText ?? "")) resolveQuotaStatus();
+			if (event.method === "setStatus" && event.statusKey === "multi-auth-quota" && /^5h 80%/.test(event.statusText ?? "")) resolveQuotaStatus();
+			if (event.method === "setStatus" && event.statusKey === "multi-auth-quota" && /^alt key 5h 80%/.test(event.statusText ?? "")) resolveAlternateStatus();
 			for (let i = waiters.length - 1; i >= 0; i--) {
 				if (waiters[i].id === event.id) waiters.splice(i, 1)[0].resolve(event);
 			}
@@ -95,6 +105,15 @@ export default function probe(pi) {
 	});
 	const models = await send({ id: "models", type: "get_available_models" });
 	assert.equal(models.success, true);
+	let alternateTimer;
+	try {
+		await Promise.race([
+			alternateStatus,
+			new Promise((_, reject) => { alternateTimer = setTimeout(() => reject(new Error(`Alternate Go quota status missing: ${JSON.stringify(statusEvents)}`)), 5_000); }),
+		]);
+	} finally {
+		clearTimeout(alternateTimer);
+	}
 	const model = models.data.models.find((candidate) => candidate.provider === "opencode-go-2" && candidate.id === "beam-free");
 	assert.ok(model, "OpenCode Go clone is missing the fallback test model");
 	const selected = await send({ id: "select", type: "set_model", provider: model.provider, modelId: model.id });

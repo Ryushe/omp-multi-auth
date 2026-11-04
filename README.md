@@ -107,6 +107,8 @@ Run `/multi-auth limits` to inspect quota and usage information for Codex, Googl
 
 For Go, the extension queries the provider's usage endpoint with each account's active key and shows the five-hour, weekly, and monthly included-usage windows and their reset times. The status line shows the most constrained window, including a window reported as limited. Go's limits are shared usage meters, and models can consume the allowance at different rates. Free models can remain available after an included Go limit is reached.
 
+If OMP has several Go keys saved under one provider and the selected key is rejected, the usage check tries other enabled saved keys and marks a successful result as an **alternate saved key**. This identifies its usage only; OMP still decides which key handles requests.
+
 The usage endpoint does not indicate whether **Extra Usage** is enabled. When an included limit is reached, requests may still succeed and be charged to your Console balance; check the Console for that setting. A low or exhausted included allowance is a snapshot, not proof that inference is blocked. The extension does not change billing settings or automatically switch accounts based on the snapshot.
 
 To let OMP try another account after a usage-limit error, configure an OMP fallback chain. For example, when starting on `opencode-go-2/glm-5.3-flash`, this entry in `~/.omp/agent/config.yml` offers the same model on account 3:
@@ -114,11 +116,11 @@ To let OMP try another account after a usage-limit error, configure an OMP fallb
 ```yaml
 retry:
   fallbackChains:
-    default:
+    opencode-go-2/glm-5.3-flash:
       - opencode-go-3/glm-5.3-flash
 ```
 
-Merge this with any existing retry settings; the default chain also applies to other chat models. See [OMP's retry settings](https://github.com/can1357/oh-my-pi/blob/main/docs/settings.md#retry-and-fallback) for per-model chains and retry behavior. If Extra Usage allows the request to succeed, no limit error is raised and this fallback will not run. Keys for the same workspace or member can share an allowance; adding keys alone does not create separate quota.
+Merge this with any existing retry settings and replace the model and account names as needed. See [OMP's retry settings](https://github.com/can1357/oh-my-pi/blob/main/docs/settings.md#retry-and-fallback) for more fallback options. If Extra Usage allows the request to succeed, no limit error is raised and this fallback will not run. Keys for the same workspace or member can share an allowance; adding keys alone does not create separate quota.
 
 ## Configuration files
 
