@@ -21,7 +21,7 @@ The limits list checks each distinct enabled saved key independently, gives it a
 
 ## Evidence and review
 
-- Tests and commands: `npm test` passed; the isolated OMP host regression passed; the live Hoster two-key status-line verification passed.
+- Tests and commands: `npm test` passed; the isolated OMP host suite passed 12 of 13 tests, with the pre-existing Antigravity prompt assertion failing as recorded in `BUGFIXES.md`; the live Hoster two-key status-line verification passed.
 - Independent review: not performed.
 - Replay/cohort/fixture evidence: fixtures cover differing quotas, invalid and disabled keys, selection identity, and runtime overrides. A user-authorized Hoster check verified two independent live quota snapshots and the pool status line.
 - Merge/ancestry evidence: based on fork `main` at `ed309214604a0cdc200474fc5effb3b82260dc99`; pending publication.
