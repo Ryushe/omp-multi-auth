@@ -17,6 +17,41 @@ export interface OpenCodeGoUsageSnapshot {
 	monthly: OpenCodeGoUsageWindow;
 }
 
+/** Expand an OMP-managed key pool without changing the key used for requests. */
+export function getOpenCodeGoPoolAccounts(
+	providerName: string,
+	displayName: string,
+	authStorage: AuthStorage,
+): QuotaAccount[] | undefined {
+	try {
+		const keys = authStorage.keys as { source?: (provider: string) => { kind?: string } | undefined } | undefined;
+		const credentials = authStorage.credentials as {
+			list?: (provider: string) => Array<{ disabledCause?: unknown; credential?: { type?: string; key?: string } }>;
+		} | undefined;
+		// Explicit overrides remain a single effective account, rather than being
+		// confused with the saved pool behind them.
+		if (keys?.source?.(providerName)?.kind !== "api_key" || typeof credentials?.list !== "function") return undefined;
+		const seen = new Set<string>();
+		const saved = credentials.list(providerName).filter((row) => {
+			const key = row.credential?.type === "api_key" ? row.credential.key : undefined;
+			if (row.disabledCause || typeof key !== "string" || !key.trim() || seen.has(key)) return false;
+			seen.add(key);
+			return true;
+		});
+		if (saved.length < 2) return undefined;
+		return saved.map((row, index) => ({
+			providerName,
+			baseProvider: "opencode-go",
+			displayName: `${displayName} (key ${index + 1})`,
+			selectionId: `${providerName}:saved-key:${index + 1}`,
+			useSavedApiKey: true,
+			auth: row.credential,
+		}));
+	} catch {
+		return undefined;
+	}
+}
+
 function parseWindow(value: unknown): OpenCodeGoUsageWindow | undefined {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
 	const raw = value as Record<string, unknown>;
@@ -95,7 +130,7 @@ export async function checkOpenCodeGoQuotaAccount(
 		peek?: (providerName: string) => Promise<string | undefined>;
 		source?: (providerName: string) => { kind?: string } | undefined;
 	} | undefined;
-	if (typeof keys?.peek === "function") {
+	if (!account.useSavedApiKey && typeof keys?.peek === "function") {
 		try {
 			key = await keys.peek(account.providerName) ?? key;
 		} catch (error: unknown) {
@@ -134,7 +169,7 @@ export async function checkOpenCodeGoQuotaAccount(
 		// OMP can keep several keys under one native provider. If its selected
 		// stored key was revoked, inspect other enabled saved keys. An explicit
 		// runtime/config/environment override must not be silently substituted.
-		if (response.status === 401 && keys?.source?.(account.providerName)?.kind === "api_key") {
+		if (!account.useSavedApiKey && response.status === 401 && keys?.source?.(account.providerName)?.kind === "api_key") {
 			const credentials = authStorage.credentials as {
 				list?: (providerName: string) => Array<{ disabledCause?: unknown; credential?: { type?: string; key?: string } }>;
 			} | undefined;

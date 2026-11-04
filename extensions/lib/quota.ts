@@ -9,7 +9,7 @@ import { getAuthStorage, adaptAuthStorage, getModels, subProviderName, type Auth
 import { loadGlobalConfig, loadProjectConfig, parseEnvConfig, mergeConfigs, normalizeEntries } from "./config.ts";
 import { getWrappedSelectIndex, showWrappedSelect } from "./ui.ts";
 import type { SelectItem } from "@oh-my-pi/pi-tui";
-import { checkOpenCodeGoQuotaAccount, getOpenCodeGoWindowRemaining, isOpenCodeGoWindowLimited } from "./opencode-go.ts";
+import { checkOpenCodeGoQuotaAccount, getOpenCodeGoPoolAccounts, getOpenCodeGoWindowRemaining, isOpenCodeGoWindowLimited } from "./opencode-go.ts";
 
 export const DEFAULT_CODEX_USAGE_BASE_URL = "https://chatgpt.com/backend-api";
 export const GOOGLE_GEMINI_QUOTA_ENDPOINT = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota";
@@ -344,7 +344,11 @@ export function formatQuotaCurrentHint(
 ): string | undefined {
 	if (!currentProviderName) return undefined;
 
-	const current = results.find((result) => result.account.providerName === currentProviderName);
+	const currentAccounts = results.filter((result) => result.account.providerName === currentProviderName);
+	if (currentAccounts.length > 1) {
+		return `Current provider: ${currentProviderName} • ${currentAccounts.length} saved keys; OMP selects the active key`;
+	}
+	const current = currentAccounts[0];
 	if (!current) return undefined;
 
 	let hint = `Current: ${current.account.displayName} is ${formatQuotaKind(current.kind)}`;
@@ -369,15 +373,17 @@ export function buildQuotaSelectItems(
 	results: QuotaCheckResult[],
 	currentProviderName: string | undefined,
 ): SelectItem[] {
-	const bestProviderName = results[0]?.account.providerName;
+	const resultId = (result: QuotaCheckResult) => result.account.selectionId ?? result.account.providerName;
+	const bestId = results[0] && resultId(results[0]);
+	const currentCount = results.filter((result) => result.account.providerName === currentProviderName).length;
 	return results.map((result) => {
 		const badges: string[] = [];
-		if (result.account.providerName === currentProviderName) badges.push("current");
-		if (result.account.providerName === bestProviderName) badges.push("best now");
+		if (currentCount === 1 && result.account.providerName === currentProviderName) badges.push("current");
+		if (resultId(result) === bestId) badges.push("best now");
 		const badgeSuffix = badges.length > 0 ? ` • ${badges.join(" • ")}` : "";
 
 		return {
-			value: result.account.providerName,
+			value: resultId(result),
 			label: `${getQuotaStatusGlyph(result.kind)} ${result.account.displayName}`,
 			description: `${result.summary}${badgeSuffix}`,
 		};
@@ -439,8 +445,11 @@ export async function selectQuotaResult(
 	results: QuotaCheckResult[],
 	preferredProviderName?: string,
 ): Promise<QuotaCheckResult | undefined> {
-	const currentProviderName = preferredProviderName || ctx.model?.provider;
-	const selectedProviderName = await showWrappedSelect(ctx, {
+	const currentProviderName = ctx.model?.provider;
+	const initialValue = results.find((result) => (result.account.selectionId ?? result.account.providerName) === preferredProviderName)
+		? preferredProviderName
+		: results.find((result) => result.account.providerName === currentProviderName)?.account.selectionId ?? currentProviderName;
+	const selectedAccountId = await showWrappedSelect(ctx, {
 		title: "Subscription Limits",
 		subtitle: [
 			"Select an account to inspect its full quota windows.",
@@ -448,12 +457,12 @@ export async function selectQuotaResult(
 			formatQuotaCurrentHint(results, currentProviderName, ctx.model),
 		].filter(Boolean).join("\n"),
 		items: buildQuotaSelectItems(results, currentProviderName),
-		initialValue: currentProviderName,
+		initialValue,
 		confirmHint: "inspect",
 		cancelHint: "close",
 	});
-	if (!selectedProviderName) return undefined;
-	return results.find((result) => result.account.providerName === selectedProviderName);
+	if (!selectedAccountId) return undefined;
+	return results.find((result) => (result.account.selectionId ?? result.account.providerName) === selectedAccountId);
 }
 
 export function normalizeGoogleRemainingPercent(value: unknown): number | undefined {
@@ -998,9 +1007,15 @@ export function collectQuotaAccounts(ctx: ExtensionContext, authStorage: AuthSto
 		if (allowed && !allowed.has(providerName)) return;
 		if (seen.has(providerName)) return;
 		seen.add(providerName);
+		const baseProvider = getBaseProvider(providerName) || providerName;
+		const pool = baseProvider === "opencode-go" ? getOpenCodeGoPoolAccounts(providerName, displayName, storage) : undefined;
+		if (pool) {
+			accounts.push(...pool);
+			return;
+		}
 		accounts.push({
 			providerName,
-			baseProvider: getBaseProvider(providerName) || providerName,
+			baseProvider,
 			displayName,
 			auth: storage.get(providerName) as AuthStorageEntry | undefined,
 		});
@@ -1199,7 +1214,7 @@ export async function handleSubsLimits(ctx: ExtensionCommandContext): Promise<vo
 	while (true) {
 		const selected = await selectQuotaResult(ctx, results, preferredProviderName);
 		if (!selected) return;
-		preferredProviderName = selected.account.providerName;
+		preferredProviderName = selected.account.selectionId ?? selected.account.providerName;
 		await showQuotaDetails(ctx, selected);
 	}
 }
@@ -1231,8 +1246,8 @@ export function formatCurrentModelQuota(
 			isOpenCodeGoWindowLimited(window) ? -1 : getOpenCodeGoWindowRemaining(window);
 		const worst = windows.reduce((left, right) => score(left.window) <= score(right.window) ? left : right);
 		const limited = isOpenCodeGoWindowLimited(worst.window) ? " limited" : "";
-		const alternate = result.opencodeGoAlternateKey ? "alt key " : "";
-		return `${alternate}${worst.label}${limited} ${formatRemainingPercent(getOpenCodeGoWindowRemaining(worst.window))} ${formatResetShort(worst.window.resetAt)}`;
+		const prefix = result.opencodeGoPoolSize ? `best of ${result.opencodeGoPoolSize} ` : result.opencodeGoAlternateKey ? "alt key " : "";
+		return `${prefix}${worst.label}${limited} ${formatRemainingPercent(getOpenCodeGoWindowRemaining(worst.window))} ${formatResetShort(worst.window.resetAt)}`;
 	}
 
 	if (result.codexSnapshot) {
@@ -1293,7 +1308,15 @@ export async function fetchStatusQuotaResult(
 			};
 			const checker = PROVIDER_QUOTA_CHECKERS.find((c) => c.baseProvider === baseProvider);
 			if (!checker) return undefined;
-			const result = await checker.check(account, authStorage);
+			const pool = baseProvider === "opencode-go" ? getOpenCodeGoPoolAccounts(providerName, providerName, authStorage) : undefined;
+			let result: QuotaCheckResult;
+			if (pool) {
+				const best = (await runQuotaChecks(pool, authStorage))[0];
+				if (!best) return undefined;
+				result = { ...best, opencodeGoPoolSize: pool.length };
+			} else {
+				result = await checker.check(account, authStorage);
+			}
 			statusQuotaCache.set(providerName, { at: Date.now(), result });
 			return result;
 		} catch {

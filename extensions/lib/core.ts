@@ -177,6 +177,8 @@ export interface QuotaAccount {
 	baseProvider: string;
 	displayName: string;
 	auth?: AuthStorageEntry;
+	selectionId?: string;
+	useSavedApiKey?: boolean;
 }
 
 export interface QuotaCheckResult {
@@ -189,6 +191,7 @@ export interface QuotaCheckResult {
 	codexSnapshot?: CodexUsageSnapshot;
 	opencodeGoSnapshot?: OpenCodeGoUsageSnapshot;
 	opencodeGoAlternateKey?: boolean;
+	opencodeGoPoolSize?: number;
 }
 
 export interface ProviderQuotaChecker {

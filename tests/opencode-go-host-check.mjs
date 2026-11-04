@@ -93,7 +93,7 @@ export default function probe(pi) {
 			const event = JSON.parse(line);
 			if (event.method === "setStatus") statusEvents.push({ key: event.statusKey, text: event.statusText });
 			if (event.method === "setStatus" && event.statusKey === "multi-auth-quota" && /^5h 80%/.test(event.statusText ?? "")) resolveQuotaStatus();
-			if (event.method === "setStatus" && event.statusKey === "multi-auth-quota" && /^alt key 5h 80%/.test(event.statusText ?? "")) resolveAlternateStatus();
+			if (event.method === "setStatus" && event.statusKey === "multi-auth-quota" && /^best of 2 5h 80%/.test(event.statusText ?? "")) resolveAlternateStatus();
 			for (let i = waiters.length - 1; i >= 0; i--) {
 				if (waiters[i].id === event.id) waiters.splice(i, 1)[0].resolve(event);
 			}

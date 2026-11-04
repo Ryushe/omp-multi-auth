@@ -105,9 +105,7 @@ For OpenCode Go, create a subscription and copy its API key from the [OpenCode C
 
 Run `/multi-auth limits` to inspect quota and usage information for Codex, Google, and OpenCode Go accounts. Results depend on provider availability and authenticated account state.
 
-For Go, the extension queries the provider's usage endpoint with each account's active key and shows the five-hour, weekly, and monthly included-usage windows and their reset times. The status line shows the most constrained window, including a window reported as limited. Go's limits are shared usage meters, and models can consume the allowance at different rates. Free models can remain available after an included Go limit is reached.
-
-If OMP has several Go keys saved under one provider and the selected key is rejected, the usage check tries other enabled saved keys and marks a successful result as an **alternate saved key**. This identifies its usage only; OMP still decides which key handles requests.
+For Go, the extension queries the provider's usage endpoint and shows the five-hour, weekly, and monthly included-usage windows and their reset times. Multiple enabled Go keys saved under the same OMP provider appear separately in `/multi-auth limits`. The status line shows the best available included-usage snapshot for a key pool, labeled with the pool size; OMP still selects the key used for requests. Go's limits are shared usage meters, and models can consume the allowance at different rates. Free models can remain available after an included Go limit is reached.
 
 The usage endpoint does not indicate whether **Extra Usage** is enabled. When an included limit is reached, requests may still succeed and be charged to your Console balance; check the Console for that setting. A low or exhausted included allowance is a snapshot, not proof that inference is blocked. The extension does not change billing settings or automatically switch accounts based on the snapshot.
 
